@@ -7,8 +7,8 @@ from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 from pymongo import MongoClient
 from bson.objectid import ObjectId
-from dotenv import load_dotenv # Required for local testing
-import certifi
+from dotenv import load_dotenv
+import certifi  # <--- THIS WAS MISSING
 
 load_dotenv()
 
@@ -18,21 +18,23 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
 MONGO_URI = os.getenv("MONGO_URI")
 
-
 if not MONGO_URI or not app.secret_key:
     print("⚠️ WARNING: Environment variables not found. Check .env or Render Settings.")
 
-
+# --- CONNECT TO MONGODB ---
 try:
-    # NEW: Using certifi to provide valid certificates
+    # We use certifi to ensure the SSL certificate is valid on all platforms (Windows/Render)
     client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
     db = client['tracking_db']
     
-    # Force a connection check immediately to see if it fails here
+    # Test the connection immediately
     client.admin.command('ping')
     print("✅ Connected to MongoDB successfully!")
 except Exception as e:
     print(f"❌ MongoDB Connection Error: {e}")
+    # We set db to None so the app doesn't crash immediately, 
+    # but it will crash later if you try to use it.
+    db = None
 
 
 # --- SCRAPER ---
@@ -48,7 +50,6 @@ def scrape_junan_status(tracking_number, phone_number):
             'User-Agent': 'Mozilla/5.0',
             'X-Requested-With': 'XMLHttpRequest'
         }
-        # Use POST to talk to the API
         response = requests.post(url, data=payload, headers=headers, timeout=10)
 
         if response.status_code == 200:
@@ -57,7 +58,6 @@ def scrape_junan_status(tracking_number, phone_number):
                 history_list = data.get('message', [])
                 if history_list:
                     latest_entry = history_list[0]
-                    # Get the last key (latest status)
                     statuses = list(latest_entry.keys())
                     if statuses:
                         return statuses[-1]
@@ -71,20 +71,18 @@ def scrape_junan_status(tracking_number, phone_number):
 # --- API: LIVE UPDATE ---
 @app.route('/api/update_status/<order_id>')
 def api_update_status(order_id):
+    if db is None: return jsonify({'error': 'Database not connected'}), 500
+    
     try:
-        # Convert string ID to ObjectId for MongoDB lookup
         oid = ObjectId(order_id)
         order = db.orders.find_one({'_id': oid})
 
         if order:
-            # Get Customer Phone
             customer = db.customers.find_one({'_id': order['customer_id']})
             phone = customer['phone'] if customer else ""
 
-            # Run Scraper
             new_status = scrape_junan_status(order['tracking_number'], phone)
 
-            # Save to MongoDB
             db.orders.update_one({'_id': oid}, {'$set': {'status': new_status}})
 
             return jsonify({'status': new_status, 'id': str(order_id)})
@@ -127,11 +125,13 @@ def index():
             flash('❌ Incorrect Verification Code (验证码错误)')
             return render_template('login.html')
 
-        # MongoDB Query
+        if db is None:
+            flash('❌ Database Connection Error. Please check logs.')
+            return render_template('login.html')
+
         user = db.customers.find_one({'name': name, 'phone': phone})
 
         if user:
-            # Convert ObjectId to string for URL
             return redirect(url_for('dashboard', user_id=str(user['_id'])))
         else:
             flash('❌ No order found for this Name/Phone.')
@@ -141,6 +141,8 @@ def index():
 
 @app.route('/dashboard/<user_id>')
 def dashboard(user_id):
+    if db is None: return "Database Error", 500
+    
     try:
         uid = ObjectId(user_id)
         user = db.customers.find_one({'_id': uid})
