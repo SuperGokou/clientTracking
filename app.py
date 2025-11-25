@@ -22,8 +22,13 @@ if not MONGO_URI or not app.secret_key:
 
 
 try:
-    client = MongoClient(MONGO_URI, tlsAllowInvalidCertificates=True)
+    # NEW: Using certifi to provide valid certificates
+    client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
     db = client['tracking_db']
+    
+    # Force a connection check immediately to see if it fails here
+    client.admin.command('ping')
+    print("✅ Connected to MongoDB successfully!")
 except Exception as e:
     print(f"❌ MongoDB Connection Error: {e}")
 
