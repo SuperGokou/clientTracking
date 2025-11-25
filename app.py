@@ -5,10 +5,9 @@ import io
 import requests
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
+from pymongo import MongoClient
+from pymongo.server_api import ServerApi  # <--- NEW IMPORT
 from bson.objectid import ObjectId
-from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
-
 from dotenv import load_dotenv
 import certifi
 
@@ -16,22 +15,33 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# --- 2. USE os.getenv SAFELY ---
+# --- CONFIGURATION ---
 app.secret_key = os.getenv("SECRET_KEY")
 MONGO_URI = os.getenv("MONGO_URI")
 
+if not MONGO_URI or not app.secret_key:
+    print("⚠️ WARNING: Environment variables not found. Check .env or Render Settings.")
 
-app = Flask(__name__)
-
-client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
-db = client['tracking_db']
-
-# Send a ping to confirm a successful connection
+# --- CONNECT TO MONGODB (Official + SSL Fix) ---
 try:
+    # We combine the Official Method (ServerApi) with the Windows Fix (certifi)
+    client = MongoClient(
+        MONGO_URI, 
+        server_api=ServerApi('1'),      # Official API versioning
+        tlsCAFile=certifi.where(),      # Fixes "SSL Handshake" on Windows/Render
+        tlsAllowInvalidCertificates=True # Extra safety net for firewall issues
+    )
+    
+    db = client['tracking_db']
+    
+    # Send a ping to confirm a successful connection
     client.admin.command('ping')
-    print("Pinged your deployment. You successfully connected to MongoDB!")
+    print("✅ Pinged your deployment. You successfully connected to MongoDB!")
+    
 except Exception as e:
-    print(e)
+    print(f"❌ MongoDB Connection Error: {e}")
+    db = None
+    
 
 # --- SCRAPER ---
 def scrape_junan_status(tracking_number, phone_number):
