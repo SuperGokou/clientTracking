@@ -24,6 +24,16 @@
             background-color: #e2e6ea; color: #555;
         }
 
+        /* Link Styling */
+        .track-link {
+            color: #3498db;
+            text-decoration: none;
+            font-family: monospace;
+            font-weight: 600;
+            border-bottom: 1px dotted #3498db;
+        }
+        .track-link:hover { color: #2980b9; border-bottom: 1px solid #2980b9; }
+
         .back-btn { display: inline-block; margin-top: 20px; text-decoration: none; color: #3498db; font-weight: bold; }
     </style>
 </head>
@@ -47,7 +57,14 @@
                 <tbody>
                     {% for order in orders %}
                     <tr>
-                        <td style="font-family: monospace; font-weight: 600;">{{ order['tracking_number'] }}</td>
+                        <td>
+                            <a href="https://www.junanex.com/tracking?code={{ order['tracking_number'] }}&mobile={{ user['phone'] }}"
+                               target="_blank"
+                               class="track-link">
+                               {{ order['tracking_number'] }}
+                            </a>
+                        </td>
+
                         <td>{{ user['name'] }}</td>
                         <td>{{ order['details'] }}</td>
                         <td>{{ order['weight'] }}</td>
