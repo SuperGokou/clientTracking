@@ -1,4 +1,3 @@
-import os  
 from flask import Flask, render_template, request, flash, redirect, url_for, session, send_file, jsonify
 import random
 import io
@@ -9,14 +8,13 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from dotenv import load_dotenv # Required for local testing
 
-load_dotenv()
 
 app = Flask(__name__)
 
 # --- 2. USE os.getenv SAFELY ---
 
-MONGO_URI = os.getenv("MONGO_URI")
-app.secret_key = os.getenv("SECRET_KEY")
+app.secret_key = 'super_secret_key'
+MONGO_URI = "mongodb+srv://mingxiaharvard_db_user:A9jYurFGiFadX4gJ@clienttracking.d4slkzd.mongodb.net/?appName=clientTracking"
 
 # Check if keys exist to prevent confusing errors later
 if not MONGO_URI or not app.secret_key:
