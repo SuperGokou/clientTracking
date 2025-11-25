@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Login</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f4f6f8; margin: 0; }
+        .login-box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); width: 90%; max-width: 360px; text-align: center; }
+
+        h2 { color: #2c3e50; margin-bottom: 5px; font-size: 1.4rem; }
+        h3 { color: #7f8c8d; margin-top: 0; margin-bottom: 25px; font-weight: normal; font-size: 1rem; }
+
+        input {
+            width: 100%; padding: 12px; margin: 8px 0;
+            border: 1px solid #ddd; border-radius: 8px;
+            box-sizing: border-box; font-size: 16px;
+        }
+
+        /* Captcha Row Styling */
+        .captcha-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+        .captcha-row input { margin: 0; flex: 1; } /* Input takes remaining space */
+        .captcha-img {
+            border: 1px solid #ddd; border-radius: 8px;
+            cursor: pointer; height: 44px; width: 120px;
+        }
+
+        button {
+            width: 100%; padding: 12px; margin-top: 15px;
+            background: #27ae60; color: white;
+            border: none; border-radius: 8px;
+            cursor: pointer; font-weight: bold; font-size: 16px;
+        }
+        button:hover { background: #219150; }
+        .error { color: #e74c3c; font-size: 0.9em; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>📦 觉觉在北美(amtfmz)</h2>
+        <h3>订单跟踪</h3>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="error">{{ messages[0] }}</div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="post">
+            <input type="text" name="name" placeholder="Name (姓名)" required>
+            <input type="tel" name="phone" placeholder="Phone (电话)" required>
+
+            <div class="captcha-row">
+                <input type="text" name="code" placeholder="Code (验证码)"
+                       maxlength="4" pattern="\d{4}" inputmode="numeric" required>
+                <img src="/captcha" class="captcha-img" onclick="this.src='/captcha?'+Math.random()" title="Click to refresh">
+            </div>
+
+            <button type="submit">View My Orders (查询订单)</button>
+        </form>
+
+    </div>
+</body>
+</html>
