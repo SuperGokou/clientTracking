@@ -12,7 +12,7 @@ app.secret_key = 'super_secret_key'
 MONGO_URI = "mongodb+srv://mingxiaharvard_db_user:A9jYurFGiFadX4gJ@clienttracking.d4slkzd.mongodb.net/?appName=clientTracking"
 
 try:
-    client = MongoClient(MONGO_URI)
+    client = MongoClient(MONGO_URI, tlsAllowInvalidCertificates=True)
     db = client['tracking_db']
 except Exception as e:
     print(f"❌ MongoDB Connection Error: {e}")
