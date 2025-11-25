@@ -3,6 +3,6 @@ Pillow
 gunicorn
 requests
 beautifulsoup4
-pymongo[srv]
 python-dotenv
+pymongo[srv]==3.12
 certifi

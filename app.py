@@ -1,22 +1,41 @@
+import os
 from flask import Flask, render_template, request, flash, redirect, url_for, session, send_file, jsonify
 import random
 import io
 import requests
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
-from pymongo import MongoClient
 from bson.objectid import ObjectId
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
+
+from dotenv import load_dotenv
+import certifi
+
+# load_dotenv()
 
 app = Flask(__name__)
+
+# --- 2. USE os.getenv SAFELY ---
+# app.secret_key = os.getenv("SECRET_KEY")
+# MONGO_URI = os.getenv("MONGO_URI")
+
+
+
+app = Flask(__name__)
+
 app.secret_key = 'super_secret_key'
-MONGO_URI = "mongodb+srv://mingxiaharvard_db_user:A9jYurFGiFadX4gJ@clienttracking.d4slkzd.mongodb.net/?appName=clientTracking"
+uri = "mongodb+srv://mingxiaharvard_db_user:A9jYurFGiFadX4gJ@clienttracking.d4slkzd.mongodb.net/?appName=clientTracking"
 
+client = MongoClient(uri, server_api=ServerApi('1'))
+db = client['tracking_db']
+
+# Send a ping to confirm a successful connection
 try:
-    client = MongoClient(MONGO_URI, tlsAllowInvalidCertificates=True)
-    db = client['tracking_db']
+    client.admin.command('ping')
+    print("Pinged your deployment. You successfully connected to MongoDB!")
 except Exception as e:
-    print(f"❌ MongoDB Connection Error: {e}")
-
+    print(e)
 
 # --- SCRAPER ---
 def scrape_junan_status(tracking_number, phone_number):
