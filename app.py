@@ -12,22 +12,18 @@ from pymongo.server_api import ServerApi
 from dotenv import load_dotenv
 import certifi
 
-# load_dotenv()
+load_dotenv()
 
 app = Flask(__name__)
 
 # --- 2. USE os.getenv SAFELY ---
-# app.secret_key = os.getenv("SECRET_KEY")
-# MONGO_URI = os.getenv("MONGO_URI")
-
+app.secret_key = os.getenv("SECRET_KEY")
+MONGO_URI = os.getenv("MONGO_URI")
 
 
 app = Flask(__name__)
 
-app.secret_key = 'super_secret_key'
-uri = "mongodb+srv://mingxiaharvard_db_user:A9jYurFGiFadX4gJ@clienttracking.d4slkzd.mongodb.net/?appName=clientTracking"
-
-client = MongoClient(uri, server_api=ServerApi('1'))
+client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
 db = client['tracking_db']
 
 # Send a ping to confirm a successful connection
