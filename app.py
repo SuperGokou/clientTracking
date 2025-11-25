@@ -1,57 +1,109 @@
-from flask import Flask, render_template, request, flash, redirect, url_for, session, send_file
-import sqlite3
+from flask import Flask, render_template, request, flash, redirect, url_for, session, send_file, jsonify
 import random
 import io
-from PIL import Image, ImageDraw, ImageFont  # Ensure Pillow is installed: pip install Pillow
+import requests
+from bs4 import BeautifulSoup
+from PIL import Image, ImageDraw, ImageFont
+from pymongo import MongoClient
+from bson.objectid import ObjectId
+from dotenv import load_dotenv  
+
+load_dotenv()
+
 
 app = Flask(__name__)
-app.secret_key = 'super_secret_key'
+app.secret_key = os.getenv("SECRET_KEY")
+
+# --- MONGODB CONNECTION (WITH YOUR CREDENTIALS) ---
+MONGO_URI = os.getenv("MONGO_URI")
+
+try:
+    client = MongoClient(MONGO_URI)
+    db = client['tracking_db']
+except Exception as e:
+    print(f"❌ MongoDB Connection Error: {e}")
 
 
-def get_db_connection():
-    conn = sqlite3.connect('database.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+# --- SCRAPER ---
+def scrape_junan_status(tracking_number, phone_number):
+    url = "https://www.junanex.com/tracking"
+    payload = {
+        't': 'query_code',
+        'code': tracking_number,
+        'mobile': phone_number
+    }
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+        # Use POST to talk to the API
+        response = requests.post(url, data=payload, headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                history_list = data.get('message', [])
+                if history_list:
+                    latest_entry = history_list[0]
+                    # Get the last key (latest status)
+                    statuses = list(latest_entry.keys())
+                    if statuses:
+                        return statuses[-1]
+            return "无相关信息 (No Info)"
+        return "Connection Failed"
+    except Exception as e:
+        print(f"Scraper Error: {e}")
+        return "Update Failed"
 
 
-# --- 1. CAPTCHA GENERATOR ---
+# --- API: LIVE UPDATE ---
+@app.route('/api/update_status/<order_id>')
+def api_update_status(order_id):
+    try:
+        # Convert string ID to ObjectId for MongoDB lookup
+        oid = ObjectId(order_id)
+        order = db.orders.find_one({'_id': oid})
+
+        if order:
+            # Get Customer Phone
+            customer = db.customers.find_one({'_id': order['customer_id']})
+            phone = customer['phone'] if customer else ""
+
+            # Run Scraper
+            new_status = scrape_junan_status(order['tracking_number'], phone)
+
+            # Save to MongoDB
+            db.orders.update_one({'_id': oid}, {'$set': {'status': new_status}})
+
+            return jsonify({'status': new_status, 'id': str(order_id)})
+
+        return jsonify({'error': 'Order not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# --- ROUTES ---
 @app.route('/captcha')
 def get_captcha():
-    # 1. Generate 4 random digits
     code = str(random.randint(1000, 9999))
     session['captcha_code'] = code
-
-    # 2. Create Image
     image = Image.new('RGB', (120, 40), color=(240, 240, 240))
-
-    # 3. Create the Drawing Tool (This is where your error likely was)
     draw = ImageDraw.Draw(image)
-
-    # 4. Add Noise (Optional security lines)
     for _ in range(5):
-        x1 = random.randint(0, 120)
-        y1 = random.randint(0, 40)
-        x2 = random.randint(0, 120)
-        y2 = random.randint(0, 40)
-        draw.line([(x1, y1), (x2, y2)], fill=(200, 200, 200), width=1)
-
-    # 5. Draw the Text
+        draw.line([(random.randint(0, 120), random.randint(0, 40)), (random.randint(0, 120), random.randint(0, 40))],
+                  fill=(200, 200, 200), width=1)
     try:
         font = ImageFont.truetype("arial.ttf", 28)
     except IOError:
         font = ImageFont.load_default()
-
-    # Position the text roughly in the center
     draw.text((35, 5), code, fill=(50, 50, 50), font=font)
-
-    # 6. Return Image
     img_io = io.BytesIO()
     image.save(img_io, 'PNG')
     img_io.seek(0)
     return send_file(img_io, mimetype='image/png')
 
 
-# --- 2. LOGIN PAGE ---
 @app.route('/', methods=('GET', 'POST'))
 def index():
     if request.method == 'POST':
@@ -59,38 +111,35 @@ def index():
         phone = request.form['phone'].strip()
         user_code = request.form['code'].strip()
 
-        # Check CAPTCHA
         real_code = session.get('captcha_code')
         if not real_code or user_code != real_code:
             flash('❌ Incorrect Verification Code (验证码错误)')
             return render_template('login.html')
 
-        # Check Database
-        conn = get_db_connection()
-        user = conn.execute('SELECT * FROM customers WHERE name = ? AND phone = ?',
-                            (name, phone)).fetchone()
-        conn.close()
+        # MongoDB Query
+        user = db.customers.find_one({'name': name, 'phone': phone})
 
         if user:
-            return redirect(url_for('dashboard', user_id=user['id']))
+            # Convert ObjectId to string for URL
+            return redirect(url_for('dashboard', user_id=str(user['_id'])))
         else:
             flash('❌ No order found for this Name/Phone.')
 
     return render_template('login.html')
 
 
-# --- 3. DASHBOARD ---
-@app.route('/dashboard/<int:user_id>')
+@app.route('/dashboard/<user_id>')
 def dashboard(user_id):
-    conn = get_db_connection()
-    user = conn.execute('SELECT * FROM customers WHERE id = ?', (user_id,)).fetchone()
-    orders = conn.execute('SELECT * FROM orders WHERE customer_id = ?', (user_id,)).fetchall()
-    conn.close()
+    try:
+        uid = ObjectId(user_id)
+        user = db.customers.find_one({'_id': uid})
+        orders = list(db.orders.find({'customer_id': uid}))
 
-    if user is None:
+        if user is None: return redirect(url_for('index'))
+
+        return render_template('dashboard.html', user=user, orders=orders)
+    except:
         return redirect(url_for('index'))
-
-    return render_template('dashboard.html', user=user, orders=orders)
 
 
 if __name__ == '__main__':

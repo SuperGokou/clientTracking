@@ -8,66 +8,22 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f8; padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
 
-        /* --- NEW HEADER STYLING (Flexbox for Left/Right alignment) --- */
-        .header-row {
-            display: flex;
-            justify-content: space-between; /* Pushes items to edges */
-            align-items: center;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-        }
+        .header-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        h1 { color: #2c3e50; margin: 0; font-size: 1.5rem; }
+        .upload-btn { background-color: #e74c3c; color: white; text-decoration: none; padding: 8px 16px; border-radius: 5px; font-weight: bold; font-size: 0.9rem; }
 
-        h1 {
-            color: #2c3e50;
-            margin: 0;
-            font-size: 1.5rem;
-        }
-
-        /* Upload Button Style */
-        .upload-btn {
-            background-color: #e74c3c; /* Red color for visibility */
-            color: white;
-            text-decoration: none;
-            padding: 8px 16px;
-            border-radius: 5px;
-            font-weight: bold;
-            font-size: 0.9rem;
-            transition: background 0.2s;
-        }
-        .upload-btn:hover { background-color: #c0392b; }
-
-        /* Table Styling */
         .table-wrapper { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 800px; }
-
+        table { width: 100%; border-collapse: collapse; min-width: 900px; }
         th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 0.9rem; }
         th { background: #f8f9fa; color: #333; font-weight: bold; white-space: nowrap; }
         tr:hover { background-color: #fafafa; }
 
-        /* Badge for Status */
-        .status-badge {
-            padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;
-            background-color: #e2e6ea; color: #555;
-        }
-
-        /* Link Styling */
-        .track-link {
-            color: #3498db;
-            text-decoration: none;
-            font-family: monospace;
-            font-weight: 600;
-            border-bottom: 1px dotted #3498db;
-        }
-        .track-link:hover { color: #2980b9; border-bottom: 1px solid #2980b9; }
-
+        .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; background-color: #e3f2fd; color: #1565c0; transition: all 0.5s; }
+        .note-text { font-style: italic; color: #e67e22; font-size: 0.85em; }
+        .track-link { color: #3498db; text-decoration: none; font-family: monospace; font-weight: 600; border-bottom: 1px dotted #3498db; }
         .back-btn { display: inline-block; margin-top: 20px; text-decoration: none; color: #3498db; font-weight: bold; }
 
-        /* Mobile Adjustment */
-        @media (max-width: 600px) {
-            .header-row { flex-direction: column; gap: 10px; align-items: flex-start; }
-            .upload-btn { width: 100%; text-align: center; box-sizing: border-box; }
-        }
+        @media (max-width: 600px) { .header-row { flex-direction: column; gap: 10px; align-items: flex-start; } .upload-btn { width: 100%; text-align: center; box-sizing: border-box; } }
     </style>
 </head>
 <body>
@@ -75,57 +31,82 @@
 
         <div class="header-row">
             <h1>👋 你好, {{ user['name'] }}</h1>
-
-            <a href="https://www.uszcn.com/identity_cards/upload/junanex?"
-               target="_blank"
-               class="upload-btn">
-               🪪 身份证上传
-            </a>
+            <a href="https://www.uszcn.com/identity_cards/upload/junanex?" target="_blank" class="upload-btn">🪪 身份证上传</a>
         </div>
 
         <div class="table-wrapper">
             <table>
                 <thead>
                     <tr>
-                        <th>运单号 (Tracking)</th>
-                        <th>收件人 (Name)</th>
-                        <th>内件明细 (Details)</th>
-                        <th>重量 (Lb)</th>
-                        <th>状态 (Status)</th>
-                        <th>电话 (Phone)</th>
-                        <th>地址 (Address)</th>
+                        <th>运单号</th>
+                        <th>收件人</th>
+                        <th>内件明细</th>
+                        <th>重量 lbs</th>
+                        <th>状态</th>
+                        <th>备注</th>
+                        <th>电话</th>
+                        <th>地址</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for order in orders %}
-                    <tr>
+                    <tr class="order-row" data-id="{{ order['_id'] }}">
                         <td>
                             <a href="https://www.junanex.com/tracking?code={{ order['tracking_number'] }}&mobile={{ user['phone'] }}"
-                               target="_blank"
-                               class="track-link">
+                               target="_blank" class="track-link">
                                {{ order['tracking_number'] }}
                             </a>
                         </td>
-
                         <td>{{ user['name'] }}</td>
                         <td>{{ order['details'] }}</td>
                         <td>{{ order['weight'] }}</td>
-                        <td><span class="status-badge">{{ order['status'] }}</span></td>
+
+                        <td>
+                            <span id="status-{{ order['_id'] }}" class="status-badge">
+                                {{ order['status'] }}
+                            </span>
+                        </td>
+
+                        <td><span class="note-text">{{ order['note'] }}</span></td>
                         <td>{{ user['phone'] }}</td>
                         <td style="font-size: 0.85em; color: #666;">{{ user['address'] }}</td>
                     </tr>
                     {% else %}
-                    <tr>
-                        <td colspan="7" style="text-align: center; padding: 20px; color: #999;">
-                            没有找到订单 (No orders found)
-                        </td>
-                    </tr>
+                    <tr><td colspan="8" style="text-align: center; padding: 20px;">No orders found</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-
         <a href="/" class="back-btn">← 退出 (Logout)</a>
     </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const rows = document.querySelectorAll('.order-row');
+
+            rows.forEach(row => {
+                const orderId = row.getAttribute('data-id');
+                const statusSpan = document.getElementById(`status-${orderId}`);
+
+                statusSpan.innerHTML = "🔄 Updating...";
+                statusSpan.style.backgroundColor = "#fff3cd";
+                statusSpan.style.color = "#856404";
+
+                fetch(`/api/update_status/${orderId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        statusSpan.innerHTML = data.status;
+                        statusSpan.style.backgroundColor = "#d4edda";
+                        statusSpan.style.color = "#155724";
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        statusSpan.innerHTML = "Check Link";
+                        statusSpan.style.backgroundColor = "#f8d7da";
+                        statusSpan.style.color = "#721c24";
+                    });
+            });
+        });
+    </script>
 </body>
 </html>
