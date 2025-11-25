@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, flash, redirect, url_for, session, send_file, jsonify
 import random
 import io
@@ -7,9 +8,18 @@ from PIL import Image, ImageDraw, ImageFont
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 
+load_dotenv()
+
 app = Flask(__name__)
-app.secret_key = 'super_secret_key'
-MONGO_URI = "mongodb+srv://mingxiaharvard_db_user:A9jYurFGiFadX4gJ@clienttracking.d4slkzd.mongodb.net/?appName=clientTracking"
+
+# --- 2. USE os.getenv SAFELY ---
+app.secret_key = os.getenv("SECRET_KEY")
+MONGO_URI = os.getenv("MONGO_URI")
+
+
+if not MONGO_URI or not app.secret_key:
+    print("⚠️ WARNING: Environment variables not found. Check .env or Render Settings.")
+
 
 try:
     client = MongoClient(MONGO_URI, tlsAllowInvalidCertificates=True)
