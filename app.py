@@ -14,7 +14,8 @@ load_dotenv()
 app = Flask(__name__)
 
 # --- 2. USE os.getenv SAFELY ---
-app.secret_key = os.getenv("SECRET_KEY")
+app.secret_key = 'super_secret_key'
+
 MONGO_URI = os.getenv("MONGO_URI")
 
 # Check if keys exist to prevent confusing errors later
