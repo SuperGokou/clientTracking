@@ -3,13 +3,13 @@ from flask import Flask, render_template, request, flash, redirect, url_for, ses
 import random
 import io
 import requests
-from bs4 import BeautifulSoup
-from PIL import Image, ImageDraw, ImageFont
-from pymongo import MongoClient
-from pymongo.server_api import ServerApi  # <--- NEW IMPORT
 from bson.objectid import ObjectId
 from dotenv import load_dotenv
 import certifi
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
+from PIL import Image, ImageDraw, ImageFont
+
 
 load_dotenv()
 
@@ -20,30 +20,21 @@ app.secret_key = os.getenv("SECRET_KEY")
 MONGO_URI = os.getenv("MONGO_URI")
 
 if not MONGO_URI or not app.secret_key:
-    print("⚠️ WARNING: Environment variables not found. Check .env or Render Settings.")
+    print("⚠️ WARNING: Environment variables missing. Check .env")
 
-# --- CONNECT TO MONGODB (Official + SSL Fix) ---
+# --- MONGODB CONNECTION ---
 try:
-    # We combine the Official Method (ServerApi) with the Windows Fix (certifi)
-    client = MongoClient(
-        MONGO_URI, 
-        server_api=ServerApi('1'),      # Official API versioning
-        tlsCAFile=certifi.where(),      # Fixes "SSL Handshake" on Windows/Render
-        tlsAllowInvalidCertificates=True # Extra safety net for firewall issues
-    )
-    
+    # Adding tlsCAFile=certifi.where() fixes SSL errors on some deployments
+    client = MongoClient(MONGO_URI, server_api=ServerApi('1'), tlsCAFile=certifi.where())
     db = client['tracking_db']
-    
-    # Send a ping to confirm a successful connection
     client.admin.command('ping')
-    print("✅ Pinged your deployment. You successfully connected to MongoDB!")
-    
+    print("✅ Connected to MongoDB successfully!")
 except Exception as e:
     print(f"❌ MongoDB Connection Error: {e}")
     db = None
-    
 
-# --- SCRAPER ---
+
+# --- SCRAPER (Refined) ---
 def scrape_junan_status(tracking_number, phone_number):
     url = "https://www.junanex.com/tracking"
     payload = {
@@ -56,7 +47,6 @@ def scrape_junan_status(tracking_number, phone_number):
             'User-Agent': 'Mozilla/5.0',
             'X-Requested-With': 'XMLHttpRequest'
         }
-        # Use POST to talk to the API
         response = requests.post(url, data=payload, headers=headers, timeout=10)
 
         if response.status_code == 200:
@@ -64,40 +54,52 @@ def scrape_junan_status(tracking_number, phone_number):
             if data.get('success'):
                 history_list = data.get('message', [])
                 if history_list:
+                    # Logic: Get the latest entry
                     latest_entry = history_list[0]
-                    # Get the last key (latest status)
-                    statuses = list(latest_entry.keys())
-                    if statuses:
-                        return statuses[-1]
+
+                    # If it's a dict like {"Status": "Time"}, return the Key (Status)
+                    # If it's {"Time": "Status"}, we might need the Value.
+                    # Usually JunAn structure implies the Key is the description.
+                    if isinstance(latest_entry, dict):
+                        keys = list(latest_entry.keys())
+                        if keys:
+                            return keys[-1]  # Takes the last key found
+
             return "无相关信息 (No Info)"
-        return "Connection Failed"
+        return f"Connection Failed ({response.status_code})"
     except Exception as e:
         print(f"Scraper Error: {e}")
         return "Update Failed"
 
 
 # --- API: LIVE UPDATE ---
-@app.route('/api/update_status/<order_id>')
-def api_update_status(order_id):
+@app.route('/api/update_status/<shipment_id>')
+def api_update_status(shipment_id):
     try:
-        # Convert string ID to ObjectId for MongoDB lookup
-        oid = ObjectId(order_id)
-        order = db.orders.find_one({'_id': oid})
+        oid = ObjectId(shipment_id)
 
-        if order:
-            # Get Customer Phone
-            customer = db.customers.find_one({'_id': order['customer_id']})
-            phone = customer['phone'] if customer else ""
+        # 1. FIX: Search in 'outgoing_shipments', not 'orders'
+        shipment = db.outgoing_shipments.find_one({'_id': oid})
+
+        if shipment:
+            # 2. FIX: Get phone from the shipment itself first, or fallback to customer
+            # (In your redesign, we saved 'phone' directly into the shipment to make it faster)
+            phone = shipment.get('phone')
+
+            if not phone:
+                # Fallback: Look up customer if phone is missing in shipment
+                customer = db.customers.find_one({'_id': shipment['customer_id']})
+                phone = customer['phone'] if customer else ""
 
             # Run Scraper
-            new_status = scrape_junan_status(order['tracking_number'], phone)
+            new_status = scrape_junan_status(shipment['tracking_number'], phone)
 
-            # Save to MongoDB
-            db.orders.update_one({'_id': oid}, {'$set': {'status': new_status}})
+            # 3. FIX: Update 'outgoing_shipments'
+            db.outgoing_shipments.update_one({'_id': oid}, {'$set': {'status': new_status}})
 
-            return jsonify({'status': new_status, 'id': str(order_id)})
+            return jsonify({'status': new_status, 'id': str(shipment_id)})
 
-        return jsonify({'error': 'Order not found'}), 404
+        return jsonify({'error': 'Shipment not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -135,14 +137,13 @@ def index():
             flash('❌ Incorrect Verification Code (验证码错误)')
             return render_template('login.html')
 
-        # MongoDB Query
+        # Find Customer
         user = db.customers.find_one({'name': name, 'phone': phone})
 
         if user:
-            # Convert ObjectId to string for URL
             return redirect(url_for('dashboard', user_id=str(user['_id'])))
         else:
-            flash('❌ No order found for this Name/Phone.')
+            flash('❌ No records found. check Name/Phone.')
 
     return render_template('login.html')
 
@@ -152,12 +153,16 @@ def dashboard(user_id):
     try:
         uid = ObjectId(user_id)
         user = db.customers.find_one({'_id': uid})
-        orders = list(db.orders.find({'customer_id': uid}))
+
+        # 4. FIX: Query 'outgoing_shipments' instead of 'orders'
+        # In the redesign, we linked them via 'customer_id'
+        orders = list(db.outgoing_shipments.find({'customer_id': uid}))
 
         if user is None: return redirect(url_for('index'))
 
         return render_template('dashboard.html', user=user, orders=orders)
-    except:
+    except Exception as e:
+        print(f"Dashboard Error: {e}")
         return redirect(url_for('index'))
 
 
