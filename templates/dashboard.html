@@ -87,7 +87,7 @@
         <a href="/" class="back-btn">← 退出 (Logout)</a>
     </div>
 
-    <script>
+<script>
         document.addEventListener("DOMContentLoaded", function() {
             const rows = document.querySelectorAll('.order-row');
 
@@ -95,6 +95,7 @@
                 const orderId = row.getAttribute('data-id');
                 const statusSpan = document.getElementById(`status-${orderId}`);
 
+                // 1. Initial Loading State
                 statusSpan.innerHTML = "🔄 Updating...";
                 statusSpan.style.backgroundColor = "#fff3cd";
                 statusSpan.style.color = "#856404";
@@ -102,7 +103,19 @@
                 fetch(`/api/update_status/${orderId}`)
                     .then(response => response.json())
                     .then(data => {
-                        statusSpan.innerHTML = data.status;
+                        const fullStatus = data.status;
+
+                        // 2. Update the Tooltip (so hover shows full text)
+                        statusSpan.setAttribute('title', fullStatus);
+
+                        // 3. Truncate Logic (JS Version)
+                        if (fullStatus.length > 16) {
+                            statusSpan.innerHTML = fullStatus.substring(0, 16) + "....";
+                        } else {
+                            statusSpan.innerHTML = fullStatus;
+                        }
+
+                        // 4. Success Styling
                         statusSpan.style.backgroundColor = "#d4edda";
                         statusSpan.style.color = "#155724";
                     })
@@ -115,5 +128,6 @@
             });
         });
     </script>
+
 </body>
 </html>
